@@ -1,44 +1,49 @@
-#include <stdio.h> // стандартный ввод/вывод(printf(),scanf()) + работа с файлами(fopen(),fclose()) 
-#include <unistd.h> //доступ к pipe, fork и всем командам для ОС 
-#include <stdlib.h> //EXIT_FAILURE
-#include <string.h> //для работы со стороками 
-#include <ctype.h> //для работы с чарами, isupper
-
-
-#define BUFSZ 256
+#include <stdio.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+#include <fcntl.h>
 
 int main() {
-    char buffer[BUFSZ];
+    char *buffer = NULL;
+    size_t bufsize = 0;
+    ssize_t len;
 
-    if (fgets(buffer, sizeof(buffer), stdin) == NULL) {
+    // === читаем имя файла ===
+    if ((len = getline(&buffer, &bufsize, stdin)) == -1) {
         const char *msg = "Не удалось прочитать имя файла\n";
         write(STDERR_FILENO, msg, strlen(msg));
-
-        return 1;
+        free(buffer);
+        return EXIT_FAILURE;
     }
     buffer[strcspn(buffer, "\n")] = '\0';
 
-    FILE *fp = fopen(buffer, "w");
-    if (!fp) {
-        perror("fopen");
-        return 1;
+    int fd = open(buffer, O_WRONLY | O_CREAT | O_TRUNC, 0644); // 0644 = rw-r--r--
+    if (fd == -1) {
+        perror("open");
+        free(buffer);
+        return EXIT_FAILURE;
     }
 
-    while (fgets(buffer, sizeof(buffer), stdin) != NULL) {
+    // перенаправляем stdout в файл
+    dup2(fd, STDOUT_FILENO);
+    close(fd);
+
+    // === читаем строки из stdin ===
+    while ((len = getline(&buffer, &bufsize, stdin)) != -1) {
         buffer[strcspn(buffer, "\n")] = '\0';
 
         if (isupper((unsigned char)buffer[0])) {
-            fprintf(fp, "%s\n", buffer);
-            fflush(fp);
+            printf("%s\n", buffer);
+            fflush(stdout);
         } else {
-            char err[BUFSZ];
-            sprintf(err, "Error: строка должна начинаться с заглавной буквы - '%s'\n", buffer);
-
-            write(STDOUT_FILENO, err, strlen(err));
-
+            dprintf(STDERR_FILENO,
+                    "Error: строка должна начинаться с заглавной буквы - '%s'\n",
+                    buffer);
         }
     }
 
-    fclose(fp);
-    return 0;
+    free(buffer);
+    return EXIT_SUCCESS;
 }
