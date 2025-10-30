@@ -1,50 +1,66 @@
-#include <stdio.h> //Для printf, getline, fprintf — стандартный ввод/вывод
-#include <unistd.h> //Для fork, usleep, execl и других системных вызовов Unix
-#include <stdlib.h> //Для exit, free, NULL
-#include <string.h> //Для strncpy, strlen, strcspn
-#include <sys/mman.h> //Для mmap, munmap
-#include <sys/stat.h> //Для флагов доступа к файлам: 0666 и типа файла
-#include <fcntl.h>  //Для shm_open, ftruncate
-#include <sys/wait.h> //Для wait
+#include <stdio.h> // Для printf, getline, fprintf — стандартный ввод/вывод
+#include <unistd.h> // Для fork, execl и других системных вызовов Unix
+#include <stdlib.h> // Для exit, free, NULL
+#include <string.h> // Для strncpy, strlen, strcspn
+#include <sys/mman.h> // Для mmap, munmap
+#include <sys/stat.h> // Для флагов доступа к файлам: 0666 и типа файла
+#include <fcntl.h>  // Для shm_open, ftruncate
+#include <sys/wait.h> // Для wait
 #include <ctype.h> // Для isupper
+#include <semaphore.h> // Для семафоров
 
 #define BUF_SIZE 1024
+#define LOG_SIZE 4096
 
-//Для mmap нужно заранее знать точный размер сегмента памяти, который мы хотим отобразить в процесс. Shared memory не может хранить обычные указатели на динамические массивы, потому что адреса в разных процессах разные. Поэтому для shm_data и shm_err мы используем фиксированный размер буфера. Это не идеальная динамика, но гарантирует корректную работу обмена данными между процессами.
-
+// Для mmap нужно заранее знать точный размер сегмента памяти, который мы хотим отобразить в процесс.
+// Shared memory не может хранить обычные указатели на динамические массивы, потому что адреса в разных процессах разные.
+// Поэтому для shm_data и shm_err мы используем фиксированный размер буфера.
+// Семафоры добавляют синхронизацию без busy-wait.
 struct shmseg {
     char buf[BUF_SIZE];
-    int ready; // 0 - пусто, 1 - готово, -1 - конец
+    sem_t sem_empty; // Parent может писать в buf, когда семафор >0
+    sem_t sem_full;  // Child может читать из buf, когда семафор >0
+};
+
+// структура для логов ошибок
+struct shmerr {
+    char log[LOG_SIZE];
+    sem_t sem_err; // семафор для доступа к логам
 };
 
 int main() {
     const char *shm_name_data = "/shm_data"; // имя сегмента разделяемой памяти для данных
-    const char *shm_name_err  = "/shm_err"; // имя сегмента разделяемой памяти для ошибок
+    const char *shm_name_err  = "/shm_err";  // имя сегмента разделяемой памяти для ошибок
 
     // создаём сегменты памяти
-    int fd_data = shm_open(shm_name_data, O_CREAT | O_RDWR, 0666); //создать и открыть(чтение/запись)
+    int fd_data = shm_open(shm_name_data, O_CREAT | O_RDWR, 0666); // создать и открыть (чтение/запись)
     int fd_err  = shm_open(shm_name_err,  O_CREAT | O_RDWR, 0666);
     if (fd_data == -1 || fd_err == -1) {
         perror("shm_open");
         exit(EXIT_FAILURE);
     }
 
-    ftruncate(fd_data, sizeof(struct shmseg)); //задаём размер сегмента для данных
-    ftruncate(fd_err, BUF_SIZE * 10); //задаём размер сегмента для лога ошибок
+    ftruncate(fd_data, sizeof(struct shmseg)); // задаём размер сегмента для данных
+    ftruncate(fd_err, sizeof(struct shmerr));  // задаём размер сегмента для лога ошибок
 
-
-    //MAP_SHARED - изменения видны другим процессам
-    struct shmseg *shm_data = mmap(NULL, sizeof(struct shmseg), PROT_READ | PROT_WRITE, MAP_SHARED, fd_data, 0); //отображаем сегмент в память
-    char *shm_err = mmap(NULL, BUF_SIZE * 10, PROT_READ | PROT_WRITE, MAP_SHARED, fd_err, 0);
+    // MAP_SHARED - изменения видны другим процессам
+    struct shmseg *shm_data = mmap(NULL, sizeof(struct shmseg),
+                                   PROT_READ | PROT_WRITE, MAP_SHARED, fd_data, 0); // отображаем сегмент в память
+    struct shmerr *shm_err = mmap(NULL, sizeof(struct shmerr),
+                                  PROT_READ | PROT_WRITE, MAP_SHARED, fd_err, 0);
     if (shm_data == MAP_FAILED || shm_err == MAP_FAILED) {
         perror("mmap");
         exit(EXIT_FAILURE);
     }
 
-    shm_data->ready = 0;
-    shm_err[0] = '\0'; //инициализируем лог ошибок пустой строкой
+    // Инициализация семафоров
+    sem_init(&shm_data->sem_empty, 1, 1); // буфер пуст, Parent может писать
+    sem_init(&shm_data->sem_full, 1, 0);  // Child ждёт данных
+    sem_init(&shm_err->sem_err, 1, 1);    // лог свободен
 
-    pid_t pid = fork(); //создаём дочерний процесс
+    shm_err->log[0] = '\0'; // инициализируем лог ошибок пустой строкой
+
+    pid_t pid = fork(); // создаём дочерний процесс
     if (pid == -1) {
         perror("fork");
         exit(EXIT_FAILURE);
@@ -53,7 +69,7 @@ int main() {
     if (pid == 0) {
         // === Child process ===
         execl("./child_2", "./child_2", NULL);
-        perror("execl");
+        perror("execl"); // execl вернётся только при ошибке
         exit(EXIT_FAILURE);
     } else {
         // === Parent process ===
@@ -67,49 +83,46 @@ int main() {
             free(buffer);
             exit(EXIT_FAILURE);
         }
-        buffer[strcspn(buffer, "\n")] = '\0'; ////"Hello\n\0" -> "Hello\0"
+        buffer[strcspn(buffer, "\n")] = '\0'; // убираем \n
         if (strlen(buffer) == 0) {
             fprintf(stderr, "Ошибка: имя файла не может быть пустым\n");
             free(buffer);
             exit(EXIT_FAILURE);
         }
 
-        while (shm_data->ready != 0){ //ждём пока дочерний процесс прочитает предыдущие данные
-             usleep(1000);
-        }
-        strncpy(shm_data->buf, buffer, BUF_SIZE); //добавляем имя файла в разделяемую память
-        shm_data->ready = 1;
+        // Отправка имени файла Child с синхронизацией через семафор
+        sem_wait(&shm_data->sem_empty);           // ждём, пока буфер пуст
+        strncpy(shm_data->buf, buffer, BUF_SIZE); // копируем имя файла
+        sem_post(&shm_data->sem_full);            // даём сигнал Child, что данные готовы
 
         while (1) {
             printf("Введите строку (пустая строка/Ctrl+D для выхода): ");
             if ((len = getline(&buffer, &bufsize, stdin)) == -1) break;
-            buffer[strcspn(buffer, "\n")] = '\0';
+            buffer[strcspn(buffer, "\n")] = '\0'; // убираем \n
+            if (strlen(buffer) == 0) break;       // пустая строка — сигнал окончания ввода
 
-            if (strlen(buffer) == 0) break;
-
-            // отправка строки Child
-            while (shm_data->ready != 0){ //ждём пока дочерний процесс прочитает предыдущие данные
-                 usleep(1000);
-            }
-            strncpy(shm_data->buf, buffer, BUF_SIZE); //добавляем строку в разделяемую память
-            shm_data->ready = 1;
+            sem_wait(&shm_data->sem_empty);      // ждём, пока буфер пуст
+            strncpy(shm_data->buf, buffer, BUF_SIZE); // копируем строку в разделяемую память
+            sem_post(&shm_data->sem_full);       // Child может читать
         }
 
-        while (shm_data->ready != 0){ 
-             usleep(1000);
-        }
-        shm_data->ready = -1; //сообщаем Child что данных больше не будет
+        // Сигнал окончания данных
+        sem_wait(&shm_data->sem_empty);
+        shm_data->buf[0] = '\0'; // пустая строка как маркер конца
+        sem_post(&shm_data->sem_full);
 
-        wait(NULL); //удалить запись в таблице процессов, дочернего процеса
+        wait(NULL); // ждем завершения дочернего процесса
 
-        if (strlen(shm_err) > 0)
-            printf("\n=== Лог ошибок ===\n%s", shm_err);
+        // Вывод логов ошибок
+        if (strlen(shm_err->log) > 0)
+            printf("\n=== Лог ошибок ===\n%s", shm_err->log);
         else
             printf("\nОшибок не обнаружено ✅\n");
 
-        munmap(shm_data, sizeof(struct shmseg)); //отсоединяем сегменты разделяемой памяти от процесса
-        munmap(shm_err, BUF_SIZE * 10);
-        shm_unlink(shm_name_data); // удаляем сегменты разделяемой памяти из системы
+        // Отсоединяем сегменты разделяемой памяти
+        munmap(shm_data, sizeof(struct shmseg));
+        munmap(shm_err, sizeof(struct shmerr));
+        shm_unlink(shm_name_data); // удаляем сегменты из системы
         shm_unlink(shm_name_err);
         free(buffer); // освобождаем память буфера
     }
