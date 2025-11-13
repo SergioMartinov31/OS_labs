@@ -53,10 +53,20 @@ int main() {
         exit(EXIT_FAILURE);
     }
 
-    // Инициализация семафоров
-    sem_init(&shm_data->sem_empty, 1, 1); // буфер пуст, Parent может писать
-    sem_init(&shm_data->sem_full, 1, 0);  // Child ждёт данных
-    sem_init(&shm_err->sem_err, 1, 1);    // лог свободен
+    // Инициализация семафоров (_, 1, _ ) - 1 - общий семафор между процессами
+    if (sem_init(&shm_data->sem_empty, 1, 1) == -1){
+        perror("sem_init");
+        exit(EXIT_FAILURE);
+    }; // буфер пуст, Parent может писать
+    if (sem_init(&shm_data->sem_full, 1, 0) == -1){
+        perror("sem_init");
+        exit(EXIT_FAILURE);
+    }  // Child ждёт данных
+    if (sem_init(&shm_err->sem_err, 1, 1) == -1){
+        perror("sem_init");
+        exit(EXIT_FAILURE);
+    }    // лог свободен
+
 
     shm_err->log[0] = '\0'; // инициализируем лог ошибок пустой строкой
 
@@ -91,8 +101,8 @@ int main() {
         }
 
         // Отправка имени файла Child с синхронизацией через семафор
-        sem_wait(&shm_data->sem_empty);           // ждём, пока буфер пуст
-        strncpy(shm_data->buf, buffer, BUF_SIZE); // копируем имя файла
+        sem_wait(&shm_data->sem_empty);           // ждём, пока буфер пуст, уменьшаем sem_empty
+        strncpy(shm_data->buf, buffer, BUF_SIZE); // передаём имя файла в буфер
         sem_post(&shm_data->sem_full);            // даём сигнал Child, что данные готовы
 
         while (1) {
@@ -101,7 +111,7 @@ int main() {
             buffer[strcspn(buffer, "\n")] = '\0'; // убираем \n
             if (strlen(buffer) == 0) break;       // пустая строка — сигнал окончания ввода
 
-            sem_wait(&shm_data->sem_empty);      // ждём, пока буфер пуст
+            sem_wait(&shm_data->sem_empty);      // ждём, пока буфер пуст, Parent может писать
             strncpy(shm_data->buf, buffer, BUF_SIZE); // копируем строку в разделяемую память
             sem_post(&shm_data->sem_full);       // Child может читать
         }
@@ -109,7 +119,7 @@ int main() {
         // Сигнал окончания данных
         sem_wait(&shm_data->sem_empty);
         shm_data->buf[0] = '\0'; // пустая строка как маркер конца
-        sem_post(&shm_data->sem_full);
+        sem_post(&shm_data->sem_full); //Child может читать
 
         wait(NULL); // ждем завершения дочернего процесса
 
