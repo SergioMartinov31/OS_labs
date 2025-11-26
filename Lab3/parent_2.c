@@ -101,9 +101,18 @@ int main() {
         }
 
         // Отправка имени файла Child с синхронизацией через семафор
-        sem_wait(&shm_data->sem_empty);           // ждём, пока буфер пуст, уменьшаем sem_empty
-        strncpy(shm_data->buf, buffer, BUF_SIZE); // передаём имя файла в буфер
-        sem_post(&shm_data->sem_full);            // даём сигнал Child, что данные готовы
+        if (sem_wait(&shm_data->sem_empty) == -1) { // ждём, пока буфер пуст, уменьшаем sem_empty
+            perror("sem_wait (sem_empty)");
+            exit(EXIT_FAILURE);
+        }
+        if (strncpy(shm_data->buf, buffer, BUF_SIZE) == NULL) { // передаём имя файла в буфер (возвращает  указатель на shm_data->buf)
+            fprintf(stderr, "strncpy failed\n");
+            exit(EXIT_FAILURE);
+        }
+        if (sem_post(&shm_data->sem_full) == -1) { // даём сигнал Child, что данные готовы
+            perror("sem_post (sem_full)");
+            exit(EXIT_FAILURE);
+}
 
         while (1) {
             printf("Введите строку (пустая строка/Ctrl+D для выхода): ");
