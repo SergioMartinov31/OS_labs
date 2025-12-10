@@ -73,7 +73,7 @@ void* calculation_area(void* arg) {
     }
 
     pthread_mutex_lock(&result_mutex);
-    if (local_max > max_area) max_area = local_max;
+    if (local_max > max_area) max_area = local_max; //Работаем с общим ресурсом поэтому мьютекс
     pthread_mutex_unlock(&result_mutex);
 
     return NULL;
@@ -107,7 +107,7 @@ int main(int argc, char* argv[]) { // argc - кол-во аргументов, a
         args[i].start = i * step;
         args[i].end = (i == num_threads - 1) ? n : (i + 1) * step;
 
-        if (pthread_create(&threads[i], NULL, calculation_area, &args[i]) != 0) {
+        if (pthread_create(&threads[i], NULL, calculation_area, &args[i]) != 0) { // id потока, атрибуты поток, аргументы потока
             fprintf(stderr, "Ошибка создания потока %d!\n", i);
             free(input_data->points);
             free(input_data);
@@ -118,12 +118,12 @@ int main(int argc, char* argv[]) { // argc - кол-во аргументов, a
     }
 
     for (int i = 0; i < num_threads; i++) {
-        pthread_join(threads[i], NULL);
+        pthread_join(threads[i], NULL); // id потока, куда сохранить возвращаемое значение потока(Null)
     }
 
     clock_gettime(CLOCK_MONOTONIC, &end);
 
-    double t = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
+    double t = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9; // приведом к секундам
 
     printf("Максимальная площадь: %lf\n", max_area);
     printf("Время выполнения: %lf секунд\n", t);
