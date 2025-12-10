@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-fPIC -Iinclude -O2
+CFLAGS=-fPIC -Iinclude -O2 
 
 all: libs prog1 prog2
 
