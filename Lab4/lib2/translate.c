@@ -1,4 +1,4 @@
-#include "contracts.h"
+#include "../contracts.h"
 #include <stdlib.h>
 
 char* translation(long x) {

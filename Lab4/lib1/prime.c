@@ -1,4 +1,4 @@
-#include "contracts.h"
+#include "../contracts.h"
 #include <math.h>
 
 int PrimeCount(int A, int B) {

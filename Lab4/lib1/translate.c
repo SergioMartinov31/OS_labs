@@ -1,4 +1,4 @@
-#include "contracts.h"
+#include "../contracts.h"
 #include <stdlib.h>
 
 char* translation(long x) {
@@ -15,7 +15,6 @@ char* translation(long x) {
     }
     buf[i] = '\0';
 
-    // reverse
     for (int j = 0; j < i / 2; j++) {
         char tmp = buf[j];
         buf[j] = buf[i - 1 - j];
