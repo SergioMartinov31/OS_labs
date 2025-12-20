@@ -1,0 +1,95 @@
+// 1) Минимальный DAG (1 джоба)
+
+{
+  "max_parallel_jobs": 1,
+  "jobs": [
+    {
+      "name": "job1",
+      "depends_on": [],
+      "cmd": "echo SingleJob"
+    }
+  ]
+}
+
+// 2) Линейный DAG (строгая последовательность) 
+
+{
+  "max_parallel_jobs": 3,
+  "jobs": [
+    { "name": "job1", "depends_on": [], "cmd": "echo Job1" },
+    { "name": "job2", "depends_on": ["job1"], "cmd": "echo Job2" },
+    { "name": "job3", "depends_on": ["job2"], "cmd": "echo Job3" }
+  ]
+}
+
+
+// 3) Максимальный параллелизм без зависимостей
+{
+  "max_parallel_jobs": 2,
+  "jobs": [
+    { "name": "job1", "depends_on": [], "cmd": "echo Job1" },
+    { "name": "job2", "depends_on": [], "cmd": "echo Job2" },
+    { "name": "job3", "depends_on": [], "cmd": "echo Job3" }
+  ]
+}
+
+
+// 4) Семафор со степенью 1 (аналог мьютекса)
+
+{
+  "max_parallel_jobs": 3,
+  "semaphores": [
+    { "name": "sem1", "value": 1 }
+  ],
+  "jobs": [
+    { "name": "job1", "depends_on": [], "semaphore": "sem1", "cmd": "echo Job1" },
+    { "name": "job2", "depends_on": [], "semaphore": "sem1", "cmd": "echo Job2" },
+    { "name": "job3", "depends_on": [], "cmd": "echo Job3" }
+  ]
+}
+
+
+// 5) Семафор со степенью >1
+
+{
+  "max_parallel_jobs": 5,
+  "semaphores": [
+    { "name": "sem2", "value": 2 }
+  ],
+  "jobs": [
+    { "name": "job1", "depends_on": [], "semaphore": "sem2", "cmd": "echo Job1" },
+    { "name": "job2", "depends_on": [], "semaphore": "sem2", "cmd": "echo Job2" },
+    { "name": "job3", "depends_on": [], "semaphore": "sem2", "cmd": "echo Job3" }
+  ]
+}
+
+
+// 6 Ошибка в джобе → прерывание DAG
+
+{
+  "max_parallel_jobs": 2,
+  "jobs": [
+    { "name": "job1", "depends_on": [], "cmd": "false" },
+    { "name": "job2", "depends_on": ["job1"], "cmd": "echo Job2" }
+  ]
+}
+
+
+// 7️ Цикл зависимостей (валидация DAG)
+
+{
+  "jobs": [
+    { "name": "job1", "depends_on": ["job2"], "cmd": "echo Job1" },
+    { "name": "job2", "depends_on": ["job3"], "cmd": "echo Job2" },
+    { "name": "job3", "depends_on": ["job1"], "cmd": "echo Job3" }
+  ]
+}
+
+// 8 Несколько независимых компонент
+
+{
+  "jobs": [
+    { "name": "job1", "depends_on": [], "cmd": "echo Job1" },
+    { "name": "job2", "depends_on": [], "cmd": "echo Job2" }
+  ]
+}

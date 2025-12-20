@@ -2,7 +2,7 @@
 #include <stdlib.h>
 
 char* translation(long x) {
-    char* buf = malloc(70);
+    char* buf = (char*)malloc(70 * sizeof(char));
     int i = 0;
     if (x == 0) {
         buf[0] = '0';

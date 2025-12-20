@@ -13,13 +13,13 @@ translate_f translation = NULL;
 int load_lib(const char* path) {
     if (lib) dlclose(lib); // выгружаем предыдущую библиотеку
     
-    lib = dlopen(path, RTLD_LAZY); // загружаем новую библиотеку RTLD_LAZY - отложенная загрузка символов
+    lib = dlopen(path, RTLD_LAZY); // загружаем новую библиотеку RTLD_LAZY - отложенная загрузка символов пока они не нужны, возвращает указатель на библиотеку
     if (!lib) {
         printf("Error loading library: %s\n", dlerror()); //dlerror - получение сообщения об ошибке
         return 0;
     }
 
-    PrimeCount = (prime_f)dlsym(lib, "PrimeCount"); //dlsym - получение адреса функции из библиотеки
+    PrimeCount = (prime_f)dlsym(lib, "PrimeCount"); //dlsym - получение адреса функции из библиотеки, возвращает указатель на символ библиотеки
     translation = (translate_f)dlsym(lib, "translation");
 
     if (!PrimeCount || !translation) {

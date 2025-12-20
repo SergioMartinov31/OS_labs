@@ -3,7 +3,7 @@
 
 int PrimeCount(int A, int B) {
     int n = B + 1;
-    char* sieve = calloc(n, 1);
+    char* sieve = calloc(n, 1); // выделяем память и инициализируем нулями
 
     sieve[0] = sieve[1] = 1;
 

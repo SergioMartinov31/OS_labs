@@ -1,0 +1,61 @@
+{
+  "max_parallel_jobs": 2,
+  "semaphores": [
+    { "name": "sem_resource", "value": 2 }
+  ],
+  "jobs": [
+    {
+      "name": "job10",
+      "depends_on": ["job9", "job1"],
+      "cmd": "echo Job10"
+    },
+    {
+      "name": "job9",
+      "depends_on": ["job7", "job8"],
+      "cmd": "echo Job9"
+    },
+    {
+      "name": "job8",
+      "depends_on": ["job5"],
+      "cmd": "echo Job8"
+    },
+    {
+      "name": "job7",
+      "depends_on": ["job2", "job3", "job6"],
+      "cmd": "echo Job7"
+    },
+    {
+      "name": "job6",
+      "depends_on": ["job4"],
+      "semaphore": "sem_resource",
+      "cmd": "echo Job6"
+    },
+    {
+      "name": "job5",
+      "depends_on": ["job3", "job4"],
+      "cmd": "echo Job5"
+    },
+    {
+      "name": "job4",
+      "depends_on": [],
+      "cmd": "echo Job4"
+    },
+    {
+      "name": "job3",
+      "depends_on": ["job1"],
+      "semaphore": "sem_resource",
+      "cmd": "echo Job3"
+    },
+    {
+      "name": "job2",
+      "depends_on": ["job1"],
+      "semaphore": "sem_resource",
+      "cmd": "echo Job2"
+    },
+    {
+      "name": "job1",
+      "depends_on": [],
+      "cmd": "echo Job1"
+    }
+  ]
+}
